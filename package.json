@@ -1,0 +1,38 @@
+{
+  "name": "resizeimgapp",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/cli": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
+    "@capacitor/device": "^7.0.0",
+    "@capacitor/filesystem": "^7.0.0",
+    "@capacitor/toast": "^7.0.0",
+    "browser-image-compression": "^2.0.2",
+    "hammerjs": "^2.0.8",
+    "idb": "^8.0.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-image-crop": "^11.0.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/react": "^19.0.10",
+    "@types/react-dom": "^19.0.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "eslint": "^9.21.0",
+    "eslint-plugin-react": "^7.37.4",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.19",
+    "globals": "^15.15.0",
+    "vite": "^6.2.0"
+  }
+}
