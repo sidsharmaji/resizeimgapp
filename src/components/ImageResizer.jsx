@@ -74,79 +74,62 @@ const ImageResizer = ({ onBack }) => {
   };
 
   const compressToTargetSize = async (file, targetBytes) => {
-    let min = 0.1;
-    let max = 1.0;
-    let quality = 0.7;
+    let minQuality = 0.01; // Minimum quality level
+    let maxQuality = 1.0; // Maximum quality level
+    let quality = 0.7; // Starting quality level
     let compressedFile = file;
     let attempts = 0;
-    const maxAttempts = 15;
-    const tolerance = 0.05;
-    const initialSize = file.size;
-    let bestFile = file;
-    let bestSizeDiff = Infinity;
+    const maxAttempts = 15; // Maximum number of attempts
+    const tolerance = 0.01; // Tolerance for the target size (1%)
 
-    if (targetBytes >= initialSize) {
-      return file;
+    if (targetBytes >= file.size) {
+      return file; // If the target size is larger than the original, return the original file
     }
-
-    // Calculate optimal dimensions based on target size ratio
-    const img = new Image();
-    await new Promise((resolve) => {
-      img.onload = resolve;
-      img.src = URL.createObjectURL(file);
-    });
-
-    const sizeRatio = Math.sqrt(targetBytes / initialSize);
-    const newWidth = Math.round(img.width * sizeRatio);
-    const newHeight = Math.round(img.height * sizeRatio);
 
     while (attempts < maxAttempts) {
       const options = {
-        maxSizeMB: Math.max(targetBytes / (1024 * 1024), 0.01),
+        maxSizeMB: targetBytes / (1024 * 1024), // Convert targetBytes to MB
         useWebWorker: true,
         initialQuality: quality,
-        maxWidthOrHeight: Math.max(newWidth, newHeight),
         fileType: 'image/jpeg',
-        alwaysKeepResolution: false,
         onProgress: (progress) => {
-          const attemptProgress = Math.min((attempts / maxAttempts) * 50, 50);
-          const compressionStepProgress = Math.min(progress * 50, 50);
-          setCompressionProgress(Math.min(Math.max(1, attemptProgress + compressionStepProgress), 100));
+          const attemptProgress = (attempts / maxAttempts) * 100;
+          setCompressionProgress(Math.min(Math.round(attemptProgress + progress), 100));
         },
       };
 
       try {
         compressedFile = await imageCompression(file, options);
         const currentSize = compressedFile.size;
-        const sizeDiff = Math.abs(currentSize - targetBytes);
+        const sizeRatio = currentSize / targetBytes;
 
-        if (sizeDiff < bestSizeDiff) {
-          bestSizeDiff = sizeDiff;
-          bestFile = compressedFile;
+        if (Math.abs(1 - sizeRatio) <= tolerance) {
+          // If the size is within the tolerance, return the compressed file
+          return compressedFile;
         }
 
-        if (sizeDiff <= targetBytes * tolerance) {
-          break;
-        }
-
-        // Binary search approach for faster convergence
+        // Adjust the quality level based on whether the current size is too large or too small
         if (currentSize > targetBytes) {
-          max = quality;
-          quality = (min + quality) / 2;
+          maxQuality = quality; // Reduce the quality range
         } else {
-          min = quality;
-          quality = (max + quality) / 2;
+          minQuality = quality; // Increase the quality range
         }
+
+        // Set the new quality level to the midpoint of the current range
+        quality = (minQuality + maxQuality) / 2;
+
+        // Prevent quality from going too low or too high
+        quality = Math.max(0.01, Math.min(1, quality));
+
+        attempts++;
       } catch (error) {
         console.error('Compression attempt failed:', error);
-        max = quality;
-        quality = (min + quality) / 2;
+        break;
       }
-
-      attempts++;
     }
 
-    return bestFile;
+    // If we couldn't achieve the target size within the maximum attempts, return the best attempt
+    return compressedFile;
   };
 
   const createResizedImage = (file) => {
@@ -221,10 +204,13 @@ const ImageResizer = ({ onBack }) => {
         targetSizeUnit === 'KB' ? targetSize * 1024 : targetSize * 1024 * 1024;
       const processedFile = await compressToTargetSize(selectedFile, targetBytes);
 
-      const resizedImage = await createResizedImage(processedFile); // Create a resized image blob
-      setPreviewUrl(resizedImage.url);
-      setNewSize(resizedImage.size);
-      setResizedBlob(resizedImage.blob); // Ensure resizedBlob is set
+      // Create a preview URL for the compressed file
+      const url = URL.createObjectURL(processedFile);
+      const finalSize = Math.round(processedFile.size / 1024);
+
+      setPreviewUrl(url);
+      setNewSize(finalSize);
+      setResizedBlob(processedFile); // Store the compressed file blob
       setLoading(false);
     } catch (error) {
       console.error('Error compressing image:', error);

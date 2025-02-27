@@ -28,20 +28,19 @@ const ImageCompressor = ({ onBack }) => {
   const MBToBytes = (mb) => mb * 1024 * 1024
 
   const compressToTargetSize = async (file, targetBytes) => {
-    let min = 0.05 // Lower minimum quality for more compression range
-    let max = 1.0
-    let quality = 0.9 // Start with higher quality for better initial result
-    let compressedFile = file
-    let attempts = 0
-    const maxAttempts = 50 // More attempts for better accuracy
-    const tolerance = 0.02 // Tighter tolerance for more precise results
-    const initialSize = file.size
-    let bestFile = file
-    let bestSizeDiff = Infinity
+    let min = 0.05; // Lower minimum quality for more compression range
+    let max = 1.0;
+    let quality = 0.9; // Start with higher quality
+    let compressedFile = file;
+    let attempts = 0;
+    const maxAttempts = 50; // More attempts for better accuracy
+    const tolerance = 0.02; // Tighter tolerance
+    const initialSize = file.size;
+    let bestFile = file;
+    let bestSizeDiff = Infinity;
 
-    // If target size is larger than original, return original
     if (targetBytes >= initialSize) {
-      return file
+      return file;
     }
 
     while (attempts < maxAttempts) {
@@ -52,58 +51,55 @@ const ImageCompressor = ({ onBack }) => {
         maxWidthOrHeight: 4096,
         fileType: 'image/jpeg',
         alwaysKeepResolution: true,
-        exifOrientation: 1, // Preserve image orientation
-        onProgress: (progress) => setCompressionProgress(progress * 100)
-      }
+        onProgress: (progress) => {
+          const attemptProgress = Math.min((attempts / maxAttempts) * 50, 50);
+          const compressionStepProgress = Math.min(progress * 50, 50);
+          setCompressionProgress(Math.min(Math.max(1, attemptProgress + compressionStepProgress), 100));
+        }
+      };
 
       try {
-        compressedFile = await imageCompression(file, options)
-        const currentSize = compressedFile.size
-        const targetRatio = currentSize / targetBytes
+        compressedFile = await imageCompression(file, options);
+        const currentSize = compressedFile.size;
+        const targetRatio = currentSize / targetBytes;
 
-        // Normalize progress to stay between 1-100%
-        const attemptProgress = Math.min((attempts / maxAttempts) * 50, 50) // 50% weight for attempts
-        const compressionStepProgress = Math.min(progress * 50, 50) // 50% weight for compression
-        setCompressionProgress(Math.min(Math.max(1, attemptProgress + compressionStepProgress), 100))
-
-        const sizeDiff = Math.abs(currentSize - targetBytes)
+        const sizeDiff = Math.abs(currentSize - targetBytes);
         if (sizeDiff < bestSizeDiff) {
-          bestSizeDiff = sizeDiff
-          bestFile = compressedFile
+          bestSizeDiff = sizeDiff;
+          bestFile = compressedFile;
         }
 
         if (Math.abs(1 - targetRatio) <= tolerance || Math.abs(max - min) < 0.001) {
-          break
+          break;
         }
 
         // Enhanced quality adjustment algorithm
         if (currentSize > targetBytes) {
-          max = quality
+          max = quality;
           // More aggressive reduction when far from target
-          const ratio = targetBytes / currentSize
-          const step = (quality - min) * (1 - ratio) * 0.8
-          quality = Math.max(min, quality - step)
+          const ratio = targetBytes / currentSize;
+          const step = (quality - min) * (1 - ratio) * 0.8;
+          quality = Math.max(min, quality - step);
         } else {
-          min = quality
+          min = quality;
           // More conservative increase when close to target
-          const ratio = currentSize / targetBytes
-          const step = (max - quality) * (1 - ratio) * 0.5
-          quality = Math.min(max, quality + step)
+          const ratio = currentSize / targetBytes;
+          const step = (max - quality) * (1 - ratio) * 0.5;
+          quality = Math.min(max, quality + step);
         }
 
-        quality = Math.max(0.1, Math.min(1, quality)) // Ensure minimum quality of 0.1
+        quality = Math.max(0.1, Math.min(1, quality)); // Ensure minimum quality of 0.1
       } catch (error) {
-        console.error('Compression attempt failed:', error)
-        // If compression fails, try with a lower quality
-        quality = Math.max(0.01, quality - 0.1)
+        console.error('Compression attempt failed:', error);
+        max = quality;
+        quality = (min + quality) / 2;
       }
-      
-      attempts++
+
+      attempts++;
     }
 
-    // Return the file that got closest to target size
-    return bestFile
-  }
+    return bestFile;
+  };
 
   const handleCompress = async () => {
     if (!selectedFile) return
