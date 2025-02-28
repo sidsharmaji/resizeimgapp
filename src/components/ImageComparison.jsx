@@ -27,11 +27,15 @@ const ImageComparison = ({ originalImage, processedImage }) => {
       <div className="image-comparison">
         <div className="image-container">
           <h4>Original</h4>
-          <img src={originalImage} alt="Original" className="comparison-image" />
+          <div className="image-wrapper">
+            <img src={originalImage} alt="Original" className="comparison-image" />
+          </div>
         </div>
         <div className="image-container">
           <h4>Processed</h4>
-          <img src={processedImage} alt="Processed" className="comparison-image" />
+          <div className="image-wrapper">
+            <img src={processedImage} alt="Processed" className="comparison-image" />
+          </div>
         </div>
       </div>
 

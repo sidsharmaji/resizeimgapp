@@ -1,9 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
-import ReactCrop from 'react-image-crop'
-import 'react-image-crop/dist/ReactCrop.css'
+import { useState, useRef } from 'react'
 import { useImageProcessing } from '../context/ImageProcessingContext'
 import ImageComparison from './ImageComparison'
-import { setupPinchZoom, setupDoubleTap, setupPan, cleanupGestures } from '../utils/touchGestures'
+import ReactCrop from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
 
 const ImageCropper = ({ onBack }) => {
   const { addToHistory, getTooltip } = useImageProcessing()
@@ -18,13 +17,21 @@ const ImageCropper = ({ onBack }) => {
     width: 50,
     height: 50,
     x: 25,
-    y: 25,
-    aspect: 16 / 9
+    y: 25
   })
   const [completedCrop, setCompletedCrop] = useState(null)
-  const imgRef = useRef(null)
-  const containerRef = useRef(null)
-  const hammerRef = useRef(null)
+  const imageRef = useRef(null)
+
+  const aspectRatios = [
+    { name: 'Free', value: null },
+    { name: 'Square', value: 1 },
+    { name: '16:9', value: 16/9 },
+    { name: '4:3', value: 4/3 },
+    { name: '3:2', value: 3/2 },
+    { name: 'Portrait', value: 3/4 },
+    { name: 'Instagram', value: 1 },
+    { name: 'Facebook Cover', value: 2.7 }
+  ]
 
   const handleFileSelect = (event) => {
     const file = event.target.files[0]
@@ -40,57 +47,72 @@ const ImageCropper = ({ onBack }) => {
     }
   }
 
-  const onImageLoad = (e) => {
-    imgRef.current = e.target
-
-    if (containerRef.current) {
-      // Setup pinch zoom
-      const pinchHammer = setupPinchZoom(containerRef.current, (scale) => {
-        setCrop(prev => ({
-          ...prev,
-          width: Math.min(100, prev.width * scale),
-          height: Math.min(100, prev.height * scale)
-        }))
+  const handleAspectRatioChange = (ratio) => {
+    if (ratio) {
+      const width = 50
+      const height = width / ratio
+      setCrop({
+        unit: '%',
+        width,
+        height,
+        x: (100 - width) / 2,
+        y: (100 - height) / 2
       })
-
-      // Setup double tap to reset
-      const doubleTapHammer = setupDoubleTap(containerRef.current, () => {
-        setCrop({
-          unit: '%',
-          width: 50,
-          height: 50,
-          x: 25,
-          y: 25,
-          aspect: 16 / 9
-        })
+    } else {
+      setCrop({
+        unit: '%',
+        width: 50,
+        height: 50,
+        x: 25,
+        y: 25
       })
-
-      // Setup pan gesture
-      const panHammer = setupPan(containerRef.current,
-        (e) => {
-          setCrop(prev => ({
-            ...prev,
-            x: Math.min(100 - prev.width, Math.max(0, prev.x + e.deltaX / imgRef.current.width * 100)),
-            y: Math.min(100 - prev.height, Math.max(0, prev.y + e.deltaY / imgRef.current.height * 100))
-          }))
-        }
-      )
-
-      hammerRef.current = [pinchHammer, doubleTapHammer, panHammer]
     }
   }
 
+  const getCroppedImg = (image, crop) => {
+    const canvas = document.createElement('canvas')
+    const scaleX = image.naturalWidth / image.width
+    const scaleY = image.naturalHeight / image.height
+    canvas.width = crop.width
+    canvas.height = crop.height
+    const ctx = canvas.getContext('2d')
+
+    ctx.drawImage(
+      image,
+      crop.x * scaleX,
+      crop.y * scaleY,
+      crop.width * scaleX,
+      crop.height * scaleY,
+      0,
+      0,
+      crop.width,
+      crop.height
+    )
+
+    return new Promise((resolve) => {
+      canvas.toBlob((blob) => {
+        resolve({
+          url: URL.createObjectURL(blob),
+          size: blob.size
+        })
+      }, 'image/jpeg', 1)
+    })
+  }
+
   const handleCrop = async () => {
-    if (!imgRef.current || !completedCrop) return
+    if (!completedCrop || !imageRef.current) return
 
     try {
       setLoading(true)
-      const croppedImage = await createCroppedImage(imgRef.current, completedCrop)
+      const croppedImage = await getCroppedImg(
+        imageRef.current,
+        completedCrop
+      )
       setPreviewUrl(croppedImage.url)
       setNewSize(Math.round(croppedImage.size / 1024))
       addToHistory({
         type: 'Crop',
-        details: `Cropped to ${completedCrop.width}x${completedCrop.height}`,
+        details: `Cropped to ${completedCrop.width.toFixed(0)}x${completedCrop.height.toFixed(0)}`,
         originalUrl: originalUrl,
         resultUrl: croppedImage.url
       })
@@ -99,36 +121,6 @@ const ImageCropper = ({ onBack }) => {
       console.error('Error cropping image:', error)
       setLoading(false)
     }
-  }
-
-  const createCroppedImage = (image, crop) => {
-    return new Promise((resolve) => {
-      const canvas = document.createElement('canvas')
-      const scaleX = image.naturalWidth / image.width
-      const scaleY = image.naturalHeight / image.height
-      canvas.width = crop.width
-      canvas.height = crop.height
-      const ctx = canvas.getContext('2d')
-
-      ctx.drawImage(
-        image,
-        crop.x * scaleX,
-        crop.y * scaleY,
-        crop.width * scaleX,
-        crop.height * scaleY,
-        0,
-        0,
-        crop.width,
-        crop.height
-      )
-
-      canvas.toBlob((blob) => {
-        resolve({
-          url: URL.createObjectURL(blob),
-          size: blob.size
-        })
-      }, 'image/jpeg', 1)
-    })
   }
 
   const handleDownload = () => {
@@ -141,14 +133,6 @@ const ImageCropper = ({ onBack }) => {
     link.click()
     document.body.removeChild(link)
   }
-
-  useEffect(() => {
-    return () => {
-      if (hammerRef.current) {
-        hammerRef.current.forEach(hammer => cleanupGestures(hammer))
-      }
-    }
-  }, [])
 
   return (
     <div className="tool-container">
@@ -170,63 +154,63 @@ const ImageCropper = ({ onBack }) => {
 
         {selectedFile && (
           <div className="crop-section">
-            <div className="crop-controls">
-              <select
-                value={crop.aspect}
-                onChange={(e) => setCrop({ ...crop, aspect: Number(e.target.value) })}
-                className="aspect-select"
-                title={getTooltip('aspect')}
-              >
-                <option value={16/9}>16:9</option>
-                <option value={4/3}>4:3</option>
-                <option value={1}>1:1</option>
-                <option value={null}>Free</option>
-              </select>
+            <div className="aspect-ratio-controls">
+              {aspectRatios.map((ratio) => (
+                <button
+                  key={ratio.name}
+                  onClick={() => handleAspectRatioChange(ratio.value)}
+                  className="aspect-ratio-button"
+                  title={`Set to ${ratio.name} aspect ratio`}
+                >
+                  {ratio.name}
+                </button>
+              ))}
             </div>
 
-            <ReactCrop
-              crop={crop}
-              onChange={(c) => setCrop(c)}
-              onComplete={(c) => setCompletedCrop(c)}
-              aspect={crop.aspect}
-            >
-              <img
-                src={previewUrl}
-                onLoad={onImageLoad}
-                alt="Crop preview"
-                className="crop-image"
-              />
-            </ReactCrop>
+            <div className="crop-container">
+              <ReactCrop
+                crop={crop}
+                onChange={(c) => setCrop(c)}
+                onComplete={(c) => setCompletedCrop(c)}
+                aspect={crop.width / crop.height}
+              >
+                <img
+                  ref={imageRef}
+                  src={originalUrl}
+                  alt="Crop preview"
+                  style={{ maxWidth: '100%' }}
+                />
+              </ReactCrop>
+            </div>
 
             <button
               onClick={handleCrop}
-              disabled={loading || !completedCrop}
+              disabled={loading || !completedCrop?.width}
               className="action-button"
-              title={getTooltip('crop')}
+              title={getTooltip('apply')}
             >
-              {loading ? 'Processing...' : 'Crop Image'}
+              {loading ? 'Processing...' : 'Apply Crop'}
             </button>
 
-            {completedCrop && previewUrl && (
-              <ImageComparison
-                originalImage={originalUrl}
-                processedImage={previewUrl}
-              />
-            )}
-
-            <div className="preview-section">
-              <div className="size-info">
-                <p>Original size: {originalSize} KB</p>
-                {newSize && <p>New size: {newSize} KB</p>}
+            {previewUrl && previewUrl !== originalUrl && (
+              <div className="preview-section">
+                <ImageComparison
+                  originalImage={originalUrl}
+                  processedImage={previewUrl}
+                />
+                <div className="size-info">
+                  <p>Original size: {originalSize} KB</p>
+                  {newSize && <p>New size: {newSize} KB</p>}
+                </div>
+                <button 
+                  onClick={handleDownload} 
+                  className="download-button"
+                  title={getTooltip('download')}
+                >
+                  Download Cropped Image
+                </button>
               </div>
-              <button 
-                onClick={handleDownload} 
-                className="download-button"
-                title={getTooltip('download')}
-              >
-                Download Cropped Image
-              </button>
-            </div>
+            )}
           </div>
         )}
       </div>

@@ -19,6 +19,7 @@ const ImageResizer = ({ onBack }) => {
   const [resizedBlob, setResizedBlob] = useState(null);
 
   const presets = {
+    'Passport Photo (600x600)': { width: 600, height: 600 },
     'HD (1280x720)': { width: 1280, height: 720 },
     'Full HD (1920x1080)': { width: 1920, height: 1080 },
     '4K (3840x2160)': { width: 3840, height: 2160 },
@@ -200,9 +201,65 @@ const ImageResizer = ({ onBack }) => {
       setLoading(true);
       setCompressionProgress(0);
 
+      if (!targetSize || targetSize <= 0) {
+        throw new Error('Please enter a valid target size greater than 0.');
+      }
+
       const targetBytes =
         targetSizeUnit === 'KB' ? targetSize * 1024 : targetSize * 1024 * 1024;
-      const processedFile = await compressToTargetSize(selectedFile, targetBytes);
+
+      if (targetBytes < 1024) { // Minimum 1KB
+        throw new Error('Target size is too small. Please enter a larger size.');
+      }
+
+      // Calculate optimal dimensions based on target size
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('Failed to load image. Please try again.'));
+        img.src = URL.createObjectURL(selectedFile);
+      });
+
+      const originalWidth = img.width;
+      const originalHeight = img.height;
+      const aspectRatio = originalWidth / originalHeight;
+      
+      // Calculate scaling factor based on target size
+      const currentSize = selectedFile.size;
+      const scaleFactor = Math.sqrt(targetBytes / currentSize);
+      
+      // Calculate new dimensions maintaining aspect ratio
+      const newWidth = Math.round(originalWidth * scaleFactor);
+      const newHeight = Math.round(originalHeight * scaleFactor); // Fixed: was using undefined newHeight
+
+      // Add validation for dimensions
+      if (newWidth <= 0 || newHeight <= 0) {
+        throw new Error('Target size is too small. Please choose a larger target size.');
+      }
+
+      // First resize the image to optimal dimensions
+      const canvas = document.createElement('canvas');
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, newWidth, newHeight);
+
+      // Convert to blob with initial quality
+      const initialBlob = await new Promise(resolve => 
+        canvas.toBlob(resolve, 'image/jpeg', 0.9)
+      );
+
+      // Then apply final compression to meet target size
+      const processedFile = await compressToTargetSize(new File([initialBlob], selectedFile.name), targetBytes);
+
+      if (!processedFile) {
+        throw new Error('Failed to compress image to target size. Please try a larger target size.');
+      }
+
+      // Validate the compressed file size
+      if (processedFile.size === 0) {
+        throw new Error('Compression resulted in an invalid file. Please try different settings.');
+      }
 
       // Create a preview URL for the compressed file
       const url = URL.createObjectURL(processedFile);
@@ -210,6 +267,8 @@ const ImageResizer = ({ onBack }) => {
 
       setPreviewUrl(url);
       setNewSize(finalSize);
+      setWidth(newWidth);
+      setHeight(newHeight);
       setResizedBlob(processedFile); // Store the compressed file blob
       setLoading(false);
     } catch (error) {

@@ -31,16 +31,33 @@ const ImageRotator = ({ onBack }) => {
     }
   }
 
+  const [animationClass, setAnimationClass] = useState('')
+  const [touchFeedback, setTouchFeedback] = useState(false)
+
   const handleRotate = (degrees) => {
+    setAnimationClass('rotate-animation')
     setRotation((prev) => (prev + degrees) % 360)
+    setTimeout(() => setAnimationClass(''), 300)
   }
 
   const handleFlipHorizontal = () => {
+    setAnimationClass('flip-h-animation')
     setFlipH((prev) => !prev)
+    setTimeout(() => setAnimationClass(''), 300)
   }
 
   const handleFlipVertical = () => {
+    setAnimationClass('flip-v-animation')
     setFlipV((prev) => !prev)
+    setTimeout(() => setAnimationClass(''), 300)
+  }
+
+  const handleTouchStart = () => {
+    setTouchFeedback(true)
+  }
+
+  const handleTouchEnd = () => {
+    setTouchFeedback(false)
   }
 
   const handleApplyTransforms = async () => {
@@ -201,11 +218,18 @@ const ImageRotator = ({ onBack }) => {
               </button>
             </div>
 
-            <div className="preview-container">
+            <div 
+              className={`preview-container ${touchFeedback ? 'touch-active' : ''}`}
+              ref={containerRef}
+              onTouchStart={handleTouchStart}
+              onTouchEnd={handleTouchEnd}
+              role="img"
+              aria-label="Image preview with rotation and flip controls"
+            >
               <img
                 src={previewUrl}
                 alt="Preview"
-                className="preview-image"
+                className={`preview-image ${animationClass}`}
                 style={{
                   transform: `rotate(${rotation}deg) scale(${flipH ? -1 : 1}, ${flipV ? -1 : 1})`,
                 }}
