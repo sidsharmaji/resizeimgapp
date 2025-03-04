@@ -1,7 +1,10 @@
 import { useState } from 'react';
 import imageCompression from 'browser-image-compression';
+import { useImageProcessing } from '../context/ImageProcessingContext';
+import { handleProcessingError } from '../utils/errorHandler';
 
 const ImageResizer = ({ onBack }) => {
+  const { updateProgress } = useImageProcessing();
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [originalSize, setOriginalSize] = useState(null);
@@ -17,6 +20,10 @@ const ImageResizer = ({ onBack }) => {
   const [selectedPreset, setSelectedPreset] = useState('');
   const [activeTab, setActiveTab] = useState('dimensions');
   const [resizedBlob, setResizedBlob] = useState(null);
+  const [error, setError] = useState(null);
+
+  const startLoading = () => setLoading(true);
+  const clearError = () => setError(null);
 
   const presets = {
     'Passport Photo (600x600)': { width: 600, height: 600 },
