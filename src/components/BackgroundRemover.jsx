@@ -3,7 +3,7 @@ import { useImageProcessing } from '../context/ImageProcessingContext'
 import ImageComparison from './ImageComparison'
 
 const BackgroundRemover = ({ onBack }) => {
-  const { addToHistory, getTooltip } = useImageProcessing()
+  const { addToHistory, getTooltip, updateProgress, cleanupResources } = useImageProcessing()
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [originalUrl, setOriginalUrl] = useState(null)
@@ -180,7 +180,10 @@ const BackgroundRemover = ({ onBack }) => {
 
         // Update progress
         if (i % (data.length / 10) < 4) {
-          setProgress(Math.round((i / data.length) * 100))
+          updateProgress(
+            Math.round((i / data.length) * 100),
+            `Processing pixel data: ${Math.round((i / data.length) * 100)}%`
+          )
         }
       }
 
@@ -201,11 +204,14 @@ const BackgroundRemover = ({ onBack }) => {
         resultUrl: processedImageUrl
       })
 
-      setProgress(100)
+      updateProgress(100, 'Background removal completed')
       setLoading(false)
+      cleanupResources()
+      cleanupResources()
     } catch (error) {
       console.error('Error removing background:', error)
       setLoading(false)
+      cleanupResources()
     }
   }
 

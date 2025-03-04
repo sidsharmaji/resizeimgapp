@@ -31,8 +31,8 @@ const ImageRotator = ({ onBack }) => {
     }
   }
 
-  const [animationClass, setAnimationClass] = useState('')
   const [touchFeedback, setTouchFeedback] = useState(false)
+  const [animationClass, setAnimationClass] = useState('')
 
   const handleRotate = (degrees) => {
     setAnimationClass('rotate-animation')
@@ -59,6 +59,41 @@ const ImageRotator = ({ onBack }) => {
   const handleTouchEnd = () => {
     setTouchFeedback(false)
   }
+
+  useEffect(() => {
+    if (containerRef.current && previewUrl) {
+      // Setup swipe for rotation
+      const swipeHammer = setupSwipe(
+        containerRef.current,
+        () => handleRotate(90),  // swipe left to rotate clockwise
+        () => handleRotate(-90)  // swipe right to rotate counter-clockwise
+      )
+
+      // Setup pan for flipping
+      const panHammer = setupPan(
+        containerRef.current,
+        (e) => {
+          if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+            if (Math.abs(e.deltaX) > 50) {
+              handleFlipHorizontal()
+            }
+          } else {
+            if (Math.abs(e.deltaY) > 50) {
+              handleFlipVertical()
+            }
+          }
+        }
+      )
+
+      hammerRef.current = [swipeHammer, panHammer]
+    }
+
+    return () => {
+      if (hammerRef.current) {
+        hammerRef.current.forEach(hammer => cleanupGestures(hammer))
+      }
+    }
+  }, [previewUrl])
 
   const handleApplyTransforms = async () => {
     if (!selectedFile) return
@@ -131,41 +166,6 @@ const ImageRotator = ({ onBack }) => {
     link.click()
     document.body.removeChild(link)
   }
-
-  useEffect(() => {
-    if (containerRef.current && previewUrl) {
-      // Setup swipe for rotation
-      const swipeHammer = setupSwipe(
-        containerRef.current,
-        () => handleRotate(90),  // swipe left to rotate clockwise
-        () => handleRotate(-90)  // swipe right to rotate counter-clockwise
-      )
-
-      // Setup pan for flipping
-      const panHammer = setupPan(
-        containerRef.current,
-        (e) => {
-          if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
-            if (Math.abs(e.deltaX) > 50) {
-              handleFlipHorizontal()
-            }
-          } else {
-            if (Math.abs(e.deltaY) > 50) {
-              handleFlipVertical()
-            }
-          }
-        }
-      )
-
-      hammerRef.current = [swipeHammer, panHammer]
-    }
-
-    return () => {
-      if (hammerRef.current) {
-        hammerRef.current.forEach(hammer => cleanupGestures(hammer))
-      }
-    }
-  }, [previewUrl])
 
   return (
     <div className="tool-container">

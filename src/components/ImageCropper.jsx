@@ -3,6 +3,7 @@ import { useImageProcessing } from '../context/ImageProcessingContext'
 import ImageComparison from './ImageComparison'
 import ReactCrop from 'react-image-crop'
 import 'react-image-crop/dist/ReactCrop.css'
+import { validateImage, handleProcessingError, ErrorComponent } from '../utils/errorHandler'
 
 const ImageCropper = ({ onBack }) => {
   const { addToHistory, getTooltip } = useImageProcessing()
@@ -12,6 +13,7 @@ const ImageCropper = ({ onBack }) => {
   const [originalSize, setOriginalSize] = useState(null)
   const [newSize, setNewSize] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [crop, setCrop] = useState({
     unit: '%',
     width: 50,
@@ -36,6 +38,8 @@ const ImageCropper = ({ onBack }) => {
   const handleFileSelect = (event) => {
     const file = event.target.files[0]
     if (file) {
+      try {
+        validateImage(file)
       setSelectedFile(file)
       setOriginalSize(Math.round(file.size / 1024))
       const reader = new FileReader()
@@ -44,6 +48,9 @@ const ImageCropper = ({ onBack }) => {
         setOriginalUrl(reader.result)
       }
       reader.readAsDataURL(file)
+      } catch (err) {
+        handleProcessingError(err, setError)
+      }
     }
   }
 
@@ -100,7 +107,10 @@ const ImageCropper = ({ onBack }) => {
   }
 
   const handleCrop = async () => {
-    if (!completedCrop || !imageRef.current) return
+    if (!completedCrop || !imageRef.current) {
+      handleProcessingError(new Error('Please select an area to crop'), setError)
+      return
+    }
 
     try {
       setLoading(true)
@@ -116,26 +126,34 @@ const ImageCropper = ({ onBack }) => {
         originalUrl: originalUrl,
         resultUrl: croppedImage.url
       })
-      setLoading(false)
     } catch (error) {
-      console.error('Error cropping image:', error)
+      handleProcessingError(error, setError)
+    } finally {
       setLoading(false)
     }
   }
 
   const handleDownload = () => {
-    if (!previewUrl) return
+    if (!previewUrl) {
+      handleProcessingError(new Error('No cropped image available to download'), setError)
+      return
+    }
 
-    const link = document.createElement('a')
-    link.href = previewUrl
-    link.download = `cropped-${selectedFile.name}`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    try {
+      const link = document.createElement('a')
+      link.href = previewUrl
+      link.download = `cropped-${selectedFile.name}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      handleProcessingError(error, setError)
+    }
   }
 
   return (
     <div className="tool-container">
+      {error && <ErrorComponent error={error} onClose={() => setError(null)} />}
       <div className="tool-header">
         <button onClick={onBack} className="back-button" title={getTooltip('back')}>←</button>
         <h2>Crop Image</h2>

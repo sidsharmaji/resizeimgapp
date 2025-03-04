@@ -6,17 +6,32 @@ const BatchProcessor = ({ onBack }) => {
   const [selectedFiles, setSelectedFiles] = useState([])
   const [previewUrls, setPreviewUrls] = useState([])
   const [loading, setLoading] = useState(false)
+  const [progress, setProgress] = useState(0)
   const [filters, setFilters] = useState({
     brightness: 100,
     contrast: 100,
-    saturation: 100
+    saturation: 100,
+    quality: 90
   })
   const [metadata, setMetadata] = useState([])
+  const [error, setError] = useState(null)
+  const [targetFormat, setTargetFormat] = useState('image/jpeg')
   const canvasRef = useRef(null)
+
+  const formatOptions = [
+    { value: 'image/jpeg', label: 'JPEG', extension: 'jpg' },
+    { value: 'image/png', label: 'PNG', extension: 'png' },
+    { value: 'image/webp', label: 'WebP', extension: 'webp' }
+  ]
 
   const handleFilesSelect = (event) => {
     const files = Array.from(event.target.files)
-    setSelectedFiles(files)
+    if (files.length > 20) {
+      setError('Maximum 20 files can be processed at once');
+      return;
+    }
+    setSelectedFiles(files);
+    setError(null);
     
     // Generate previews and extract metadata
     const previews = files.map(file => ({
@@ -24,117 +39,136 @@ const BatchProcessor = ({ onBack }) => {
       name: file.name,
       size: Math.round(file.size / 1024),
       type: file.type
-    }))
+    }));
     
-    setPreviewUrls(previews)
-    extractMetadata(files)
-  }
+    setPreviewUrls(previews);
+    extractMetadata(files);
+  };
 
   const extractMetadata = async (files) => {
     const metadataList = await Promise.all(files.map(file => {
       return new Promise((resolve) => {
-        const reader = new FileReader()
+        const reader = new FileReader();
         reader.onload = (e) => {
-          const img = new Image()
+          const img = new Image();
           img.onload = () => {
             resolve({
               name: file.name,
               dimensions: `${img.width}x${img.height}`,
               type: file.type,
-              lastModified: new Date(file.lastModified).toLocaleString()
-            })
-          }
-          img.src = e.target.result
-        }
-        reader.readAsDataURL(file)
-      })
-    }))
-    setMetadata(metadataList)
-  }
+              lastModified: new Date(file.lastModified).toLocaleString(),
+              size: Math.round(file.size / 1024)
+            });
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }));
+    setMetadata(metadataList);
+  };
 
-  const applyFilters = async () => {
-    if (!selectedFiles.length) return
+  const processImage = async (file, index, totalFiles) => {
+    return new Promise((resolve) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
 
-    setLoading(true)
-    const totalFiles = selectedFiles.length
-    let processedCount = 0
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        
+        ctx.filter = `brightness(${filters.brightness}%) contrast(${filters.contrast}%) saturate(${filters.saturation}%)`;
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(img, 0, 0, img.width, img.height);
+        
+        canvas.toBlob(
+          (blob) => {
+            const progress = Math.round(((index + 1) / totalFiles) * 100);
+            setProgress(progress);
 
-    const processedImages = await Promise.all(selectedFiles.map(async (file, index) => {
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      const img = new Image()
-
-      return new Promise((resolve) => {
-        img.onload = () => {
-          // Preserve original dimensions
-          canvas.width = img.width
-          canvas.height = img.height
-          
-          // Apply filters with enhanced quality
-          ctx.filter = `
-            brightness(${filters.brightness}%) 
-            contrast(${filters.contrast}%) 
-            saturate(${filters.saturation}%)
-          `
-          
-          // Use high-quality image rendering
-          ctx.imageSmoothingEnabled = true
-          ctx.imageSmoothingQuality = 'high'
-          
-          // Draw image with proper scaling
-          ctx.drawImage(img, 0, 0, img.width, img.height)
-          
-          // Convert to blob with optimal quality
-          canvas.toBlob((blob) => {
-            processedCount++
-            const progress = Math.round((processedCount / totalFiles) * 100)
-            setProgress(progress)
-          
             resolve({
               url: URL.createObjectURL(blob),
               name: file.name,
               size: Math.round(blob.size / 1024),
-              dimensions: `${img.width}x${img.height}`
-            })
-          }, 'image/jpeg', 0.92) // Increased quality setting
-        }
+              dimensions: `${img.width}x${img.height}`,
+              blob: blob
+            });
+          },
+          targetFormat,
+          filters.quality / 100
+        );
+      };
+
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const applyFilters = async () => {
+    if (!selectedFiles.length) {
+      setError('Please select files to process');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      setProgress(0);
+
+      const processedImages = [];
+      for (let i = 0; i < selectedFiles.length; i++) {
+        const result = await processImage(selectedFiles[i], i, selectedFiles.length);
+        processedImages.push(result);
+      }
+
+      setPreviewUrls(processedImages);
       
-        img.src = previewUrls[index].url
-      })
-    }))
-  
-    // Update preview URLs with enhanced metadata
-    setPreviewUrls(processedImages)
-    
-    // Add detailed processing history
-    addToHistory({
-      type: 'Batch Process',
-      details: `Applied filters: Brightness: ${filters.brightness}%, Contrast: ${filters.contrast}%, Saturation: ${filters.saturation}%`,
-      files: processedImages.length,
-      totalSize: processedImages.reduce((acc, img) => acc + img.size, 0),
-      dimensions: processedImages.map(img => img.dimensions)
-    })
-  
-    setLoading(false)
-  }
+      addToHistory({
+        type: 'Batch Process',
+        details: `Processed ${processedImages.length} images with filters and format conversion`,
+        files: processedImages.length,
+        totalSize: processedImages.reduce((acc, img) => acc + img.size, 0),
+        format: formatOptions.find(f => f.value === targetFormat).label
+      });
+    } catch (error) {
+      console.error('Error processing images:', error);
+      setError('Failed to process images. Please try again.');
+    } finally {
+      setLoading(false);
+      updateProgress(0, 'Processing completed');
+      cleanupResources();
+    }
+  };
 
   const handleFilterChange = (filter, value) => {
     setFilters(prev => ({
       ...prev,
       [filter]: value
-    }))
-  }
+    }));
+  };
 
   const handleDownload = async () => {
-    previewUrls.forEach(image => {
-      const link = document.createElement('a')
-      link.href = image.url
-      link.download = `processed-${image.name}`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    })
-  }
+    if (!previewUrls.length) {
+      setError('No processed images to download');
+      return;
+    }
+
+    try {
+      const selectedFormat = formatOptions.find(format => format.value === targetFormat);
+      previewUrls.forEach(image => {
+        const link = document.createElement('a');
+        link.href = image.url;
+        link.download = `processed-${image.name.split('.')[0]}.${selectedFormat.extension}`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      });
+    } catch (error) {
+      console.error('Error downloading files:', error);
+      setError('Failed to download processed images');
+    }
+  };
 
   return (
     <div className="tool-container">
@@ -152,12 +186,13 @@ const BatchProcessor = ({ onBack }) => {
             onChange={handleFilesSelect}
             className="file-input"
           />
+          {error && <p className="error-message" style={{ color: 'red' }}>{error}</p>}
         </div>
 
         {selectedFiles.length > 0 && (
           <div className="batch-process-section">
             <div className="filters-panel">
-              <h3>Image Filters</h3>
+              <h3>Image Adjustments</h3>
               <div className="filter-controls">
                 <div className="filter-control">
                   <label>Brightness</label>
@@ -192,54 +227,87 @@ const BatchProcessor = ({ onBack }) => {
                   />
                   <span>{filters.saturation}%</span>
                 </div>
+                <div className="filter-control">
+                  <label>Quality</label>
+                  <input
+                    type="range"
+                    min="1"
+                    max="100"
+                    value={filters.quality}
+                    onChange={(e) => handleFilterChange('quality', e.target.value)}
+                  />
+                  <span>{filters.quality}%</span>
+                </div>
               </div>
+
+              <div className="format-selection">
+                <label>Output Format</label>
+                <select
+                  value={targetFormat}
+                  onChange={(e) => setTargetFormat(e.target.value)}
+                  className="format-select"
+                >
+                  {formatOptions.map(format => (
+                    <option key={format.value} value={format.value}>
+                      {format.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <button
                 onClick={applyFilters}
                 disabled={loading}
                 className="action-button"
               >
-                {loading ? 'Processing...' : 'Apply Filters'}
+                {loading ? `Processing... ${progress}%` : 'Process Images'}
               </button>
             </div>
 
             <div className="metadata-panel">
-              <h3>Image Metadata</h3>
+              <h3>Image Information</h3>
               <div className="metadata-list">
                 {metadata.map((item, index) => (
                   <div key={index} className="metadata-item">
                     <h4>{item.name}</h4>
                     <p>Dimensions: {item.dimensions}</p>
+                    <p>Size: {item.size} KB</p>
                     <p>Type: {item.type}</p>
-                    <p>Last Modified: {item.lastModified}</p>
+                    <p>Modified: {item.lastModified}</p>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="preview-grid">
-              {previewUrls.map((image, index) => (
-                <div key={index} className="preview-item">
-                  <img src={image.url} alt={`Preview ${index + 1}`} />
-                  <div className="preview-info">
-                    <p>{image.name}</p>
-                    <p>{image.size} KB</p>
+            {previewUrls.length > 0 && (
+              <div className="preview-grid">
+                {previewUrls.map((image, index) => (
+                  <div key={index} className="preview-item">
+                    <img src={image.url} alt={`Preview ${index + 1}`} />
+                    <div className="preview-info">
+                      <p>{image.name}</p>
+                      <p>{image.size} KB</p>
+                      {image.dimensions && <p>{image.dimensions}</p>}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
-            <button
-              onClick={handleDownload}
-              className="download-button"
-              disabled={loading}
-            >
-              Download All Processed Images
-            </button>
+            {previewUrls.length > 0 && (
+              <button
+                onClick={handleDownload}
+                className="download-button"
+                disabled={loading}
+              >
+                Download All Processed Images
+              </button>
+            )}
           </div>
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default BatchProcessor
+export default BatchProcessor;

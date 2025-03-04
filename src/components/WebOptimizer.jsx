@@ -3,7 +3,7 @@ import { useImageProcessing } from '../context/ImageProcessingContext'
 import ImageComparison from './ImageComparison'
 
 const WebOptimizer = ({ onBack }) => {
-  const { addToHistory, getTooltip } = useImageProcessing()
+  const { addToHistory, getTooltip, updateProgress, cleanupResources } = useImageProcessing()
   const [selectedFile, setSelectedFile] = useState(null)
   const [previewUrl, setPreviewUrl] = useState(null)
   const [originalUrl, setOriginalUrl] = useState(null)
@@ -37,6 +37,7 @@ const WebOptimizer = ({ onBack }) => {
 
     try {
       setLoading(true)
+      updateProgress(0, 'Starting image optimization...')
 
       const img = new Image()
       img.src = originalUrl
@@ -83,10 +84,18 @@ const WebOptimizer = ({ onBack }) => {
         metadata: { responsiveCode }
       })
 
+      updateProgress(100, 'Optimization completed')
       setLoading(false)
+      updateProgress(0)
+      cleanupResources()
+      cleanupResources()
     } catch (error) {
       console.error('Error optimizing image:', error)
+      updateProgress(100, 'Optimization completed')
       setLoading(false)
+      updateProgress(0)
+      cleanupResources()
+      cleanupResources()
     }
   }
 

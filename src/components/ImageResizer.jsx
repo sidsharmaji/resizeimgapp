@@ -28,6 +28,15 @@ const ImageResizer = ({ onBack }) => {
     'Twitter Post (1200x675)': { width: 1200, height: 675 },
     'Facebook Cover (851x315)': { width: 851, height: 315 },
     'LinkedIn Cover (1584x396)': { width: 1584, height: 396 },
+    'YouTube Thumbnail (1280x720)': { width: 1280, height: 720 },
+    'Email Header (600x200)': { width: 600, height: 200 },
+    'Blog Featured Image (1200x630)': { width: 1200, height: 630 },
+    'Desktop Wallpaper (1920x1080)': { width: 1920, height: 1080 },
+    'Mobile Wallpaper (1080x1920)': { width: 1080, height: 1920 },
+    'Profile Picture (400x400)': { width: 400, height: 400 },
+    'Banner Image (1500x500)': { width: 1500, height: 500 },
+    'Product Photo (800x800)': { width: 800, height: 800 },
+    'Pinterest Pin (735x1102)': { width: 735, height: 1102 }
   };
 
   const handleFileSelect = (event) => {
@@ -171,21 +180,21 @@ const ImageResizer = ({ onBack }) => {
 
   const handleDimensionResize = async () => {
     if (!selectedFile || !width || !height) {
-      alert('Please select an image and specify dimensions');
+      handleProcessingError(new Error('Please select an image and specify dimensions'), setError);
       return;
     }
 
     try {
-      setLoading(true);
-      setCompressionProgress(0);
+      startLoading();
+      updateProgress(0);
+      clearError();
       const resizedImage = await createResizedImage(selectedFile);
       setPreviewUrl(resizedImage.url);
       setNewSize(resizedImage.size);
       setResizedBlob(resizedImage.blob); // Ensure resizedBlob is set
       setLoading(false);
     } catch (error) {
-      console.error('Error resizing image:', error);
-      alert('Error resizing image. Please try again.');
+      handleProcessingError(error, setError);
       setLoading(false);
       setCompressionProgress(0);
     }
@@ -193,13 +202,14 @@ const ImageResizer = ({ onBack }) => {
 
   const handleTargetSizeCompression = async () => {
     if (!selectedFile || !targetSize) {
-      alert('Please select an image and specify target size');
+      handleProcessingError(new Error('Please select an image and specify target size'), setError);
       return;
     }
 
     try {
-      setLoading(true);
-      setCompressionProgress(0);
+      startLoading();
+      updateProgress(0);
+      clearError();
 
       if (!targetSize || targetSize <= 0) {
         throw new Error('Please enter a valid target size greater than 0.');
@@ -272,8 +282,7 @@ const ImageResizer = ({ onBack }) => {
       setResizedBlob(processedFile); // Store the compressed file blob
       setLoading(false);
     } catch (error) {
-      console.error('Error compressing image:', error);
-      alert('Error compressing image. Please try again.');
+      handleProcessingError(error, setError);
       setLoading(false);
       setCompressionProgress(0);
     }
@@ -281,7 +290,7 @@ const ImageResizer = ({ onBack }) => {
 
   const handleDownload = async () => {
     if (!previewUrl || !resizedBlob) {
-      alert('No resized image available to download.');
+      handleProcessingError(new Error('No resized image available to download'), setError);
       return;
     }
 
@@ -302,13 +311,13 @@ const ImageResizer = ({ onBack }) => {
         URL.revokeObjectURL(url);
       }, 100);
     } catch (downloadError) {
-      console.error('Error during file download:', downloadError);
-      alert('Failed to download the image. Please try again.');
+      handleProcessingError(downloadError, setError);
     }
   };
 
   return (
     <div className="tool-container">
+      {error && <ErrorComponent error={error} onClose={() => setError(null)} />}
       <div className="tool-header">
         <button onClick={onBack} className="back-button">
           ←

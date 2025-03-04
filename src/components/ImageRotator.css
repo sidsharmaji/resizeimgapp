@@ -1,0 +1,63 @@
+/* Touch feedback styles */
+.touch-active {
+  opacity: 0.9;
+  transition: opacity 0.2s ease;
+}
+
+/* Rotation animation */
+.rotate-animation {
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Flip animations */
+.flip-h-animation {
+  transition: transform 0.3s ease-in-out;
+}
+
+.flip-v-animation {
+  transition: transform 0.3s ease-in-out;
+}
+
+/* Mobile-optimized UI */
+@media (max-width: 768px) {
+  .transform-controls {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .rotate-button,
+  .flip-button {
+    width: 100%;
+    padding: 15px;
+    font-size: 16px;
+    touch-action: manipulation;
+  }
+
+  .preview-container {
+    touch-action: pan-x pan-y;
+    user-select: none;
+    -webkit-user-select: none;
+    margin: 20px 0;
+  }
+
+  .preview-image {
+    max-width: 100%;
+    height: auto;
+    will-change: transform;
+  }
+
+  .action-button,
+  .download-button {
+    width: 100%;
+    padding: 15px;
+    margin: 10px 0;
+    font-size: 16px;
+  }
+
+  .size-info {
+    text-align: center;
+    margin: 15px 0;
+  }
+}
